@@ -1,0 +1,410 @@
+EXPERIMENT 1
+% p q z hlc(y/2) a
+D= [5 4 0.02+0.06i 0.03i 0.9
+5 1 0.08+0.24i 0.025i 1.0
+4 1 0.06+0.18i 0.02i 1.0
+4 2 0.06+0.18i 0.02i 1.0
+4 3 0.04+0.12i 0.015i 1.0
+1 2 0.01+0.03i 0.01i 0.8
+2 3 0.08+0.24i 0.025i 1.0 ];
+fb=D(:,1);
+tb=D(:,2);
+Z=D(:,3);
+hlc=D(:,4);
+a=D(:,5);y=1./Z;
+nbus=max(max(fb),max(tb));
+Y=zeros(nbus);
+nline=length(fb);
+for k=1:nline,
+p=fb(k);q=tb(k);
+y(k)=y(k)/a(k);
+Y(p,p)=Y(p,p)+y(k)+hlc(k)+(1-a(k))/a(k)*y(k);
+Y(q,q)=Y(q,q)+y(k)+hlc(k)+(a(k)-1)*y(k);
+Y(p,q)=Y(p,q)-y(k);
+Y(q,p)=Y(p,q);
+end
+Ybus=Y
+
+------------------------------------------------------------------------------------------------------------------
+
+EXPERIMENT 2A
+% p q Z hlc(Adm)
+D= [1 2 0.02+0.06i 0.03i
+1 3 0.08+0.24i 0.025i
+2 3 0.06+0.18i 0.02i
+2 4 0.06+0.18i 0.02i
+2 5 0.04+0.12i 0.015i
+3 4 0.01+0.03i 0.01i
+4 5 0.08+0.24i 0.025i];
+fb=D(:,1);
+tb=D(:,2);
+Z=D(:,3);
+hlcy=D(:,4);
+y=1./Z;
+nbus=max(max(fb),max(tb));
+Y=zeros(nbus);
+nline=length(fb);
+nlb=nline+nbus;
+A=zeros(nlb,nbus);
+for k=1:nbus
+A(k,k)=1;
+end
+for k=1:nline
+A(nbus+k,fb(k))=1;
+A(nbus+k,tb(k))=-1;
+end
+sh=zeros(nbus);
+for k=1:nline
+sh(fb(k))=sh(fb(k))+hlcy(k);
+sh(tb(k))=sh(tb(k))+hlcy(k);
+end
+ypr=zeros(nlb,nlb);
+for k=1:nbus
+ypr(k,k)=sh(k);
+end
+for k=1:nline
+ypr(nbus+k,nbus+k)=y(k);
+end
+format short;
+Ybus=A'*ypr*A
+
+------------------------------------------------------------------------------------------------------------------------
+
+EXPERIMENT 2B
+% p q Z mno mutual impedance
+D=[ 0 1 0.6i 0 0
+0 2 0.5i 1 0.1i
+2 3 0.5i 0 0
+0 1 0.4i 1 0.2i
+1 3 0.2i 0 0 ];
+p=D(:,1);
+q=D(:,2);
+Z=D(:,3);
+mno=D(:,4);
+zmc=D(:,5);
+nbus=max(max(p),max(q));
+Y=zeros(nbus);
+nline=length(p);
+A=zeros(nline,nbus);
+for k=1:nline,
+if(q(k)==0)
+A(k,p(k))=1;
+elseif(p(k)==0)
+A(k,q(k))=-1;
+end
+if(p(k)~=0 & q(k)~=0)
+A(k,p(k))=1;
+A(k,q(k))=-1;
+end
+end
+zpr=zeros(nline,nline);
+for k=1:nline
+zpr(k,k)=Z(k);
+if(mno(k))
+zpr(k,mno(k))=zmc(k);
+zpr(mno(k),k)=zmc(k);
+end
+end
+ypr=inv(zpr);
+format short;
+Ybus=A'*ypr*A
+
+------------------------------------------------------------------------------------------------------------------------
+
+EXPERIMENT 3
+ybus=[-9i 5i 4i
+5i -9i 4i
+4i 4i -8i];
+% Bus Type V Ang GMW GMVAR LMW LMVAR QMin QMax
+busdata=[1 1 1 0 0 0 0 0 0 0
+2 2 1.02 0 0.8 0 0 0 0.1 0.8
+3 3 1 0 0 0 1.0 0.8 0 0];
+
+bus=busdata(:,1);
+type=busdata(:,2);
+V=busdata(:,3);
+th=busdata(:,4);
+GMW=busdata(:,5);
+GMVAR=busdata(:,6);
+LMW=busdata(:,7);
+LMVAR=busdata(:,8);
+Qmin=busdata(:,9);
+Qmax=busdata(:,10);
+nbus=max(bus);
+P=GMW-LMW;
+Q=GMVAR-LMVAR;
+Vprev=V;
+toler=1;
+k=1;
+while(toler>0.001)
+for p=2:nbus
+sumyv=0;
+for q=1:nbus
+if p~=q
+sumyv=sumyv+ybus(p,q)*V(q);
+end
+end
+if type(p)==2
+Q(p)=-imag(conj(V(p))*(sumyv+ybus(p,p)*V(p)));
+if(Q(p)>Qmax(p)||Q(p)<Qmin(p))
+if Q(p)<Qmin(p)
+Q(p)=Qmin(p);
+else
+Q(p)=Qmax(p);
+end
+type(p)=3;
+end
+end
+V(p)=(1/ybus(p,p))*((P(p)-j*Q(p))/conj(V(p))-sumyv);
+if type(p)==2
+realv(p)=abs(Vprev(p))*cos(angle(V(p)));
+imagv(p)=abs(Vprev(p))*sin(angle(V(p)));
+V(p)=complex(realv(p),imagv(p));
+end
+
+%To find the votages at all buses and Q at pv busses
+
+fprintf('\n The votages at all buses and Q at pv busses after iteration no %d' ,k);
+if type(p)==3
+fprintf('\n V(%d)=%.4f at %.2fdeg', p, abs(V(p)), angle(V(p))*180/pi);
+else
+fprintf('\n V(%d)=%.4f at %.2fdeg , Q(%d)= %+.3f\n' , p, abs(V(p)) ,angle(V(p))*180/pi ,p, Q(p));
+end
+end
+k=k+1;
+toler=max(abs(abs(V)-abs(Vprev)));
+Vprev=V;
+end
+
+-----------------------------------------------------------------------------------------------------------------------------------
+
+EXPERIMENT 6
+% p q z hlc(ADM)
+D= [5 4 0.02+0.06i 0.03i
+5 1 0.08+0.24i 0.025i
+4 1 0.06+0.18i 0.02i
+4 2 0.06+0.18i 0.02i
+4 3 0.04+0.12i 0.015i
+1 2 0.01+0.03i 0.01i
+2 3 0.08+0.24i 0.025i];
+v(1)=1+0.2i; v(2)=1.01-0.5i; v(3)=1.05-0.3i; v(4)=1.01-0.5i; v(5)=1.0-0i;
+fb=D(:,1);
+tb=D(:,2);
+Z=D(:,3);
+ysh=D(:,4);
+y=1./Z;
+nbus=max(max(fb),max(tb));
+nline=length(fb);
+II=zeros(nbus,1);
+SG=zeros(nbus,1);
+totloss=0;
+for k=1:nline
+p=fb(k);q=tb(k);
+I(p,q)=(v(p)-v(q))*y(k)+v(p)*ysh(k);
+II(p)=II(p)+I(p,q);
+SL(p,q)=v(p)*conj(I(p,q));
+SG(p)=SG(p)+SL(p,q);
+I(q,p)=(v(q)-v(p))*y(k)+v(q)*ysh(k);
+II(q)=II(q)+I(q,p);
+SL(q,p)=v(q)*conj(I(q,p));
+SG(q)=SG(q)+SL(q,p);
+loss(k)=SL(p,q)+SL(q,p);
+totloss=totloss+loss(k);
+end
+fprintf('bus currents');
+fprintf('\nBus no Current');
+for k=1:nbus
+fprintf('\n %d %10.4f %+10.4fi',k,real(II(k)),imag(II(k)));
+end
+fprintf('\nLine flows');
+fprintf('\nFrom bus To bus Lineflows Line Loss');
+for k=1:nline
+p=fb(k);
+q=tb(k);
+fprintf('\n %d %d %10.4f%+10.4fi %10.4f%+10.4fi', p,q, real(SL(p,q)) ,imag(SL(p,q)) ,real(loss(k)) ,imag(loss(k)));
+fprintf('\n %d %d %10.4f%+10.4fi %10.4f%+10.4fi',q,p ,real(SL(q,p)) ,imag(SL(q,p)),real(loss(k)),imag(loss(k)));
+end
+fprintf('\nBus Generations');
+fprintf('\nBus no Generation');
+for k=1:nbus
+fprintf('\n%d %10.4f%+10.4fi',k,real(SG(k)),imag(SG(k)));
+end
+fprintf('\n\nTotal Losses=%10.4f%+10.4fi',real(totloss),imag(totloss));
+
+---------------------------------------------------------------------------------------------------------------------------------
+
+EXPERIMENT 9
+
+clear 
+pmax1=input('enter the maximum power before fault\n'); 
+pmax2=input('enter the maximum power during fault\n'); 
+pmax3=input('enter the maximum power after fault\n'); 
+power=input('enter the value of power transferred\n'); 
+tcl=input('enter clearing time\n'); 
+H=input('enter value of interial constant H\n');
+freq=input('enter frequency\n') ;
+delta0=asin(power/pmax1); % Initial angle depends on pre-fault maximum power 
+omega0=0.0; 
+M=H/(pi*freq); 
+delta_t=0.01; % Time step. Change the value to test for different time steps 
+pmax=pmax2; % At t=0, fault occurs and hence we start with the maximum power during 
+y1=[]; 
+z1=[]; 
+for t=0.0:delta_t:0.5 
+if(t>tcl) 
+pmax=pmax3; % If time is greater than fault clearing time, use post-fault maximum power 
+end 
+D1=omega0; 
+D2=(power-pmax*sin(delta0))/M; 
+delp=delta0+D1*delta_t; % Intermediate values of delta and omega 
+omegp=omega0+D2*delta_t; 
+D1p=omegp; 
+D2p=(power-pmax*sin(delp))/M; 
+delta0=delta0+(D1+D1p)/2*delta_t; 
+omega0=omega0+(D2+D2p)/2*delta_t; 
+delta=delta0*180/pi; % Convert to delta to degrees 
+omega=omega0; 
+y=[t D1 D2 D1p D2p ]; % to display values of time and derivatives 
+z=[t pmax delta omega]; 
+y1=[y1;y]; 
+z1=[z1;z]; 
+plot(t,delta,'r') 
+hold on 
+end 
+disp(y1) 
+disp(z1)
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+EXPERIMENT 10
+
+clear
+pmax1=input('enter the maximum power before fault\n'); 
+ pmax2=input('enter the maximum power during fault\n');  
+pmax3=input('enter the maximum power after fault\n');  
+power=input('enter the value of power transferred\n');
+tcl=input('enter clearing time\n');
+H=input('enter value of interial constant H\n'); 
+freq=input('enterfrequency\n');  
+delta0=asin(power/ pmax1); 
+omega0=0.0;  
+M=H/(pi*freq);  
+delta_t=0.05; 
+ pmax=pmax2; 
+y1=[]; 
+z1=[]; 
+for t=0.0:delta_t:0.5 if(t>tcl) 
+pmax=pmax3; 
+end 
+k1=omega0*delta_t; % Calculate the coefficients 
+l1=(power-pmax*sin(delta0))/M*delta_t; 
+k2=(omega0+l1/2)*delta_t; 
+l2=(power-pmax*sin(delta0+k1/2))/M*delta_t; 
+k3=(omega0+l2/2)*delta_t; 
+l3=(power-pmax*sin(delta0+k2/2))/M*delta_t; 
+k4=(omega0+l3)*delta_t; 
+l4=(power-pmax*sin(delta0+k3))/M*delta_t; 
+delta0=delta0+(k1+2*k2+2*k3+k4)/6; 
+omega0=omega0+(l1+2*l2+2*l3+l4)/6; 
+delta=delta0*180/pi; 
+omega=omega0; 
+y=[t k1 l1 k2 l2 k3 l3 k4 l4 ]; 
+z=[t pmax delta omega]; y1=[y1;y]; 
+z1=[z1;z]; 
+plot(t,delta,'*-r') 
+hold on 
+end 
+disp(y1) 
+disp(z1)
+
+----------------------------------------------------------------------------------------------------------------------------------
+EXPERIMENT 11A
+
+clear;
+diary('wer.txt')
+y1=[];
+[cost_coeff,PD,Ini_lam,gen_lim]=eco_wol_genlit_in; %Read input from file
+Delp=100;
+n=length(cost_coeff(:,1)); %Get number of generators
+lam=Ini_lam; %Initial value of Lambda
+while(abs(Delp)>0.001)
+iter=iter+1; %Update iteration count
+for i=1:n
+P(i)=(lam-cost_coeff(i,2))/(2*cost_coeff(i,1)); %Compute PGi
+end
+for i=1:n
+if (P(i)<gen_lim(i,1)) % Check for generator limit violations
+P(i)=gen_lim(i,1);
+end
+if (P(i)>gen_lim(i,2))
+P(i)=gen_lim(i,2);
+end
+end
+Ptotal=sum(P); %Total generation
+Delp=PD-Ptotal; %Demand - Generation
+sigma_a=sum(1./(2.*cost_coeff(:,1)));
+lam=lam+Delp/sigma_a; %Update Lambda
+y=[iter P Ptotal Delp lam];
+y1=[y1;y];
+end
+disp(y1)
+diary('wer.txt')
+Data file
+function[cost_coeff,PD,Ini_lam,gen_lim]=eco_wol_genlit_in();
+cost_coeff=[0.004 7.2 350
+0.0025 7.3 500
+0.003 6.74 600];
+PD=450;
+Ini_lam=6.0;
+gen_lim=[125 300
+125 300
+125 300];
+end
+------------------------------------------------------------------------------------------------------------------------------------
+
+EXPERIMENT 11B
+
+clear; 
+diary('wer.txt');
+y1=[]; 
+[cost_coef,PD,b_coef,lam]=eco_wl_in; %Read input from file 
+ci_coef=cost_coef(:,1); 
+bi_coef=cost_coef(:,2); 
+cdiag=diag(ci_coef); 
+iter=0; %Iteration count = 0 
+Delp=100; 
+n=length(cost_coef(:,1)); %Get number of generators 
+b_coef=b_coef./100 % Convert B coefficients to MW-1 
+while(abs(Delp)>0.001) 
+iter=iter+1; %Update iteration count 
+P1=lam-bi_coef; 
+for i=1:n 
+P2(i)=2*(ci_coef(i)+lam*b_coef(i,i)); 
+P(i)=P1(i)/P2(i); 
+end 
+Ploss =P*b_coef*P'; 
+for i=1:n 
+m1(i)=ci_coef(i)+b_coef(i,i)*bi_coef(i); 
+m2(i)=2*(ci_coef(i)+lam*b_coef(i,i))*(ci_coef(i)+lam*b_coef(i,i)); 
+m(i)=m1(i)/m2(i); 
+end 
+Delp=PD+Ploss-sum(P); 
+Dellam=Delp/sum(m); 
+lam=lam+Dellam; %Update Lambda 
+Ptotal=sum(P); 
+y=[iter P Ptotal Delp lam]; 
+y1=[y1;y]; 
+end 
+disp(y1) 
+disp('Demand') 
+function[cost_coeff,PD,b_coef,lam]=eco_wl_in(); 
+cost_coeff=[0.008 7.0 200 
+0.009 6.3 180 
+0.007 6.8 140]; 
+PD=500; 
+b_coef=[ 0.0218 0.0 0.0; 
+0.0 0.0228 0.0; 
+0.0 0.0 0.0179;] 
+lam=8; 
+end
+-----------------------------------------------------------------------------------------------------------------------------
